@@ -1,0 +1,7 @@
+[credential]
+	helper = store --file ~/.git-cred
+[user]
+	email = woonki.moon@gmail.com
+	name = moondaddi
+[core]
+	editor = nvim
