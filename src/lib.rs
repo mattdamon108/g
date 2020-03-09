@@ -3,6 +3,7 @@ extern crate clap;
 use clap::ArgMatches;
 use std::error::Error;
 use std::fs;
+use std::io::{stdin, stdout, Read, Write};
 
 #[derive(Debug)]
 pub struct Config {
@@ -31,8 +32,19 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         None => {
             // do something without profile
             match git_config {
-                Ok(c) => println!("{:?}", c),
-                _ => (),
+                Ok(c) => {
+                    if !c.has_credential {
+                        print!("You didnt't config credentials before. Will you configure to store and use credentials? (y/N)");
+                        stdout().flush().unwrap();
+                        let mut input = [0];
+                        if let Ok(i) = stdin().read(&mut input) {
+                            if i <= 1 {
+                                println!("Input {}", input[0])
+                            }
+                        }
+                    }
+                }
+                _ => println!("Error: cannot find .gitconfig file in your system"),
             }
         }
     }
