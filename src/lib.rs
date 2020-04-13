@@ -34,12 +34,18 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             match git_config {
                 Ok(c) => {
                     if !c.has_credential {
-                        print!("You didnt't config credentials before. Will you configure to store and use credentials? (y/N)");
+                        print!("You haven't configured credentials before. Will you configure to use credentials? (y/N) ");
+                        // Y: 89 , y: 121
+                        // N: 78 , n: 110
                         stdout().flush().unwrap();
                         let mut input = [0];
                         if let Ok(i) = stdin().read(&mut input) {
-                            if i <= 1 {
-                                println!("Input {}", input[0])
+                            if (input[0] == 89) | (input[0] == 121) {
+                                println!("You input Y/y");
+                            } else if (input[0] == 78) | (input[0] == 110) {
+                                println!("You input N/n");
+                            } else {
+                                println!("You input wrong!");
                             }
                         }
                     }
