@@ -1,9 +1,13 @@
 extern crate clap;
+extern crate mktemp;
 
 use clap::ArgMatches;
+use mktemp::Temp;
 use std::error::Error;
 use std::fs;
-use std::io::{stdin, stdout, Read, Write};
+use std::io;
+use std::io::{copy, stdin, stdout, Read, Write};
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct Config {
@@ -11,7 +15,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(matches: ArgMatches) -> Result<Config, Box<Error + Send + Sync>> {
+    pub fn new(matches: ArgMatches) -> Result<Config, Box<dyn Error + Send + Sync>> {
         let profile = match matches.value_of("profile") {
             Some(p) => Some(p.to_string()),
             _ => None,
@@ -38,15 +42,28 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                         // Y: 89 , y: 121
                         // N: 78 , n: 110
                         stdout().flush().unwrap();
-                        let mut input = [0];
-                        if let Ok(i) = stdin().read(&mut input) {
-                            if (input[0] == 89) | (input[0] == 121) {
-                                println!("You input Y/y");
-                            } else if (input[0] == 78) | (input[0] == 110) {
-                                println!("You input N/n");
-                            } else {
-                                println!("You input wrong!");
+                        let mut buf = String::new();
+                        stdin().read_line(&mut buf)?;
+                        let trimed_answer = buf.trim();
+                        if (trimed_answer == "Y") | (trimed_answer == "y") {
+                            println!("You input Y/y");
+                            let data = "[credential]\n\thelper = store\n";
+                            let file_path = Path::new("./test/.gitconfig_test");
+                            match prepend_file(data.as_bytes(), &file_path) {
+                                Ok(_) => println!("configured"),
+                                _ => println!("failed to configured"),
                             }
+                            println!("Please input your Github account");
+                            print!("username: ");
+                            stdin().read_line(&mut buf)?;
+                            let trimed_username = buf.trim();
+                            print!("password: ");
+                            stdin().read_line(&mut buf)?;
+                            let trimed_password = buf.trim();
+                        } else if (trimed_answer == "N") | (trimed_answer == "n") {
+                            println!("You input N/n");
+                        } else {
+                            println!("You input wrong!");
                         }
                     }
                 }
@@ -73,7 +90,7 @@ impl GitConfig {
         let mut has_store: bool = false;
         let mut store_file: Option<String> = None;
 
-        for (count, line) in gitconfig.lines().enumerate() {
+        for (_count, line) in gitconfig.lines().enumerate() {
             let trimed_line = line.trim();
 
             if trimed_line == "[credential]" {
@@ -101,6 +118,18 @@ impl GitConfig {
             store_file,
         })
     }
+}
+
+fn prepend_file<P: AsRef<Path>>(data: &[u8], file_path: &P) -> io::Result<()> {
+    let tmp_path = Temp::new_file()?;
+    let mut tmp = fs::File::create(&tmp_path)?;
+    let mut src = fs::File::open(&file_path)?;
+    tmp.write_all(&data)?;
+    copy(&mut src, &mut tmp)?;
+    fs::remove_file(&file_path)?;
+    fs::rename(&tmp_path, &file_path)?;
+    tmp_path.release();
+    Ok(())
 }
 
 #[cfg(test)]
