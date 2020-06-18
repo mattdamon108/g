@@ -1,13 +1,20 @@
 extern crate clap;
 extern crate mktemp;
+extern crate termion;
 
 use clap::ArgMatches;
 use mktemp::Temp;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::io;
 use std::io::{copy, stdin, stdout, Read, Write};
 use std::path::Path;
+use std::convert::TryInto;
+use termion::event::Key;
+use termion::input::TermRead;
+use termion::raw::IntoRawMode;
+use termion::{clear, cursor};
 
 #[derive(Debug)]
 pub struct Config {
@@ -55,15 +62,95 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                             }
                             println!("Please input your Github account");
                             print!("username: ");
-                            stdin().read_line(&mut buf)?;
-                            let trimed_username = buf.trim();
+                            let mut buf_username = String::new();
+                            stdout().flush().unwrap();
+                            stdin().read_line(&mut buf_username)?;
+                            let trimed_username = buf_username.trim();
                             print!("password: ");
-                            stdin().read_line(&mut buf)?;
-                            let trimed_password = buf.trim();
+                            let mut buf_password = String::new();
+                            stdout().flush().unwrap();
+                            stdin().read_line(&mut buf_password)?;
+                            let trimed_password = buf_password.trim();
+
+                            let mut storage = fs::OpenOptions::new()
+                                .read(true)
+                                .write(true)
+                                .create(true)
+                                .open("./test/.git-credentials")
+                                .expect("Can't find .g_credentials file");
+
+                            match storage.write_all(
+                                format!(
+                                    "https://{}:{}@github.com",
+                                    trimed_username, trimed_password
+                                )
+                                .as_bytes(),
+                            ) {
+                                Ok(()) => println!("done"),
+                                Err(_) => println!("error"),
+                            };
                         } else if (trimed_answer == "N") | (trimed_answer == "n") {
                             println!("You input N/n");
                         } else {
                             println!("You input wrong!");
+                        }
+                    } else if c.has_credential {
+                        let stored_credentials = GCredential::new();
+
+                        match stored_credentials {
+                            Ok(sc) => {
+                                let stdin = stdin();
+                                let mut stdout = stdout().into_raw_mode().unwrap();
+
+                                println!("{}", clear::All);
+
+                                for index in 0..sc.credentials.len() {
+                                    if let Some(cred) = sc.credentials.get(&index) {
+                                        println!(
+                                            "{} {}: {:?}",
+                                            cursor::Goto(5, (2 + index).try_into().unwrap_or(2)),
+                                            index,
+                                            cred
+                                        );
+                                    }
+                                }
+
+                                println!("{}", cursor::Hide);
+
+                                let mut index = 0;
+
+                                println!("{}-", cursor::Goto(4,(2+index).try_into().unwrap_or(2)));
+                                for c in stdin.keys() {
+                                    match c.unwrap() {
+                                        Key::Char('q') => break,
+                                        Key::Ctrl('c') => break,
+                                        Key::Esc => break,
+                                        Key::Up => {
+                                            if index > 0{
+                                                println!("{} ", cursor::Goto(4, (2+index).try_into().unwrap_or(2)));
+                                                index -= 1;
+                                            }else{
+                                                println!("{} ", cursor::Goto(4, (2+index).try_into().unwrap_or(2)));
+                                                index = sc.credentials.len() -1;
+                                            }
+                                            
+                                        },
+                                        Key::Down => {
+                                            if index < sc.credentials.len()-1 {
+                                                println!("{} ", cursor::Goto(4, (2+index).try_into().unwrap_or(2)));
+                                                index +=1;
+                                            }else{
+                                                println!("{} ", cursor::Goto(4, (2+index).try_into().unwrap_or(2)));
+                                                index = 0;
+                                            }
+                                        },
+                                        _ => println!("other"),
+                                    }
+                                    println!("{}-", cursor::Goto(4,(2+index).try_into().unwrap_or(2)));
+                                    stdout.flush().unwrap();
+                                }
+                            }
+                            Err(_) => {}
                         }
                     }
                 }
@@ -73,6 +160,34 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+#[derive(Debug)]
+struct GCredential {
+    credentials: HashMap<usize, (String, String)>,
+}
+
+impl GCredential {
+    fn new() -> Result<GCredential, Box<dyn Error + Send + Sync>> {
+        let mut f = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open("./test/.g_credentials")
+            .expect("Can't open .g_credentials file");
+
+        let mut stored_credentials = String::new();
+        f.read_to_string(&mut stored_credentials);
+
+        let mut credentials: HashMap<usize, (String, String)> = HashMap::new();
+        for (count, line) in stored_credentials.lines().enumerate() {
+            let trimmed_line = line.trim();
+            let splitted = trimmed_line.split_whitespace().collect::<Vec<&str>>();
+            credentials.insert(count, (splitted[0].to_string(), splitted[1].to_string()));
+        }
+
+        Ok(GCredential { credentials })
+    }
 }
 
 #[derive(Debug)]

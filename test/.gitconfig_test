@@ -1,3 +1,5 @@
+[credential]
+	helper = store
 [user]
 	email = woonki.moon@gmail.com
 	name = moondaddi
